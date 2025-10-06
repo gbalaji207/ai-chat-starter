@@ -29,6 +29,8 @@ kotlin {
         androidMain.dependencies {
             implementation(compose.preview)
             implementation(libs.androidx.activity.compose)
+
+            implementation(libs.ktor.client.okhttp)
         }
         commonMain.dependencies {
             implementation(compose.runtime)
@@ -39,9 +41,16 @@ kotlin {
             implementation(compose.components.uiToolingPreview)
             implementation(libs.androidx.lifecycle.viewmodelCompose)
             implementation(libs.androidx.lifecycle.runtimeCompose)
+
+            // import Kotlin API client BOM
+            implementation("com.aallam.openai:openai-client:4.0.1")
+            implementation ("com.aallam.openai:openai-client")
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
+        }
+        nativeMain.dependencies {
+            implementation(libs.ktor.client.darwin)
         }
     }
 }
