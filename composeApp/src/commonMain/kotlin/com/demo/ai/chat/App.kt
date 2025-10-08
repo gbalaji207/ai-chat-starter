@@ -37,6 +37,8 @@ import com.aallam.openai.api.logging.LogLevel
 import com.aallam.openai.api.model.ModelId
 import com.aallam.openai.client.LoggingConfig
 import com.aallam.openai.client.OpenAI
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.ui.tooling.preview.Preview
 
@@ -52,14 +54,14 @@ fun App() {
     // State management
     var messageInput by remember { mutableStateOf("") }
     var messages by remember { mutableStateOf(listOf<Message>()) }
-    var isLoading by remember { mutableStateOf(false) }
+    var isStreaming by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
 
     MaterialTheme {
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title = { Text("AI Chat (Day 2)") })
+                    title = { Text("AI Chat") })
             },
         ) { paddingValues ->
             Column(
@@ -77,17 +79,22 @@ fun App() {
                         Spacer(modifier = Modifier.height(8.dp))
                     }
 
-                    // Loading indicator
-                    if (isLoading) {
+                    // Streaming indicator - only show when actively streaming
+                    if (isStreaming) {
                         item {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.Start
                             ) {
                                 CircularProgressIndicator(
-                                    modifier = Modifier.size(24.dp).padding(8.dp)
+                                    modifier = Modifier.size(20.dp), strokeWidth = 2.dp
                                 )
-                                Text("AI is thinking...", modifier = Modifier.padding(8.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    "AI is typing...",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             }
                         }
                     }
@@ -103,7 +110,7 @@ fun App() {
                         onValueChange = { messageInput = it },
                         label = { Text("Enter text") },
                         placeholder = { Text("Type something...") },
-                        enabled = isLoading.not(),
+                        enabled = isStreaming.not(),
                         modifier = Modifier.weight(1f),
                     )
 
@@ -120,18 +127,27 @@ fun App() {
                                     val userMessage = messageInput
                                     messages = messages + Message(userMessage, isUser = true)
                                     messageInput = ""
-                                    isLoading = true
+
+                                    // Add empty AI message placeholder with streaming flag
+                                    messages = messages + Message(
+                                        text = "",
+                                        isUser = false,
+                                        isStreaming = true
+                                    )
+                                    isStreaming = true
 
                                     // Auto-scroll to bottom
                                     listState.animateScrollToItem(messages.size - 1)
 
                                     // Build conversation history for API
-                                    val chatMessages = messages.map { msg ->
-                                        ChatMessage(
-                                            role = if (msg.isUser) ChatRole.User else ChatRole.Assistant,
-                                            content = msg.text,
-                                        )
-                                    }
+                                    val chatMessages = messages
+                                        .filter { !it.isStreaming } // Exclude the placeholder we just added
+                                        .map { msg ->
+                                            ChatMessage(
+                                                role = if (msg.isUser) ChatRole.User else ChatRole.Assistant,
+                                                content = msg.text,
+                                            )
+                                        }
 
                                     val chatCompletionRequest = ChatCompletionRequest(
                                         model = ModelId("gpt-3.5-turbo"),
@@ -140,27 +156,70 @@ fun App() {
                                         maxTokens = 500 // Limit response length
                                     )
 
-                                    // Make API call
-                                    val response = openAI.chatCompletion(chatCompletionRequest)
+                                    // Streaming API call
+                                    var accumulatedText = ""
+                                    var chunkCount = 0
 
-                                    // Extract AI response
-                                    val aiMessage = response.choices.firstOrNull()?.message?.content
-                                        ?: "No response"
+                                    openAI.chatCompletions(chatCompletionRequest)
+                                        .catch { error ->
+                                            // Handle streaming errors
+                                            messages = messages.dropLast(1) + Message(
+                                                text = "Error: ${error.message}",
+                                                isUser = false,
+                                                isStreaming = false
+                                            )
+                                            isStreaming = false
+                                        }.onCompletion {
+                                            // Mark streaming as complete
+                                            if (accumulatedText.isNotEmpty()) {
+                                                messages = messages.dropLast(1) + Message(
+                                                    text = accumulatedText,
+                                                    isUser = false,
+                                                    isStreaming = false
+                                                )
+                                            }
+                                            isStreaming = false
 
-                                    // Add AI response to messages
-                                    messages = messages + Message(aiMessage, isUser = false)
+                                            // Final scroll to ensure we're at the absolute bottom
+                                            if (messages.isNotEmpty()) {
+                                                listState.scrollToItem(
+                                                    index = messages.size - 1,
+                                                    scrollOffset = Int.MAX_VALUE
+                                                )
+                                            }
+                                        }.collect { chunk ->
+                                            // Extract content from chunk
+                                            val content =
+                                                chunk.choices.firstOrNull()?.delta?.content
 
-                                    // Auto-scroll to bottom
-                                    listState.animateScrollToItem(messages.size - 1)
+                                            if (content != null) {
+                                                accumulatedText += content
+                                                chunkCount++
+
+                                                // Update the last message in real-time
+                                                messages = messages.dropLast(1) + Message(
+                                                    text = accumulatedText,
+                                                    isUser = false,
+                                                    isStreaming = true
+                                                )
+
+                                                // Scroll to absolute bottom every 3 chunks
+                                                // Using scrollOffset = Int.MAX_VALUE ensures we scroll to the very bottom
+                                                if (chunkCount % 3 == 0) {
+                                                    listState.scrollToItem(
+                                                        index = messages.size - 1,
+                                                        scrollOffset = Int.MAX_VALUE
+                                                    )
+                                                }
+                                            }
+                                        }
                                 } catch (e: Exception) {
                                     messages =
                                         messages + Message("Error: ${e.message}", isUser = false)
-                                } finally {
-                                    isLoading = false
                                 }
                             }
                         },
-                        enabled = isLoading.not(),
+                        enabled = !isStreaming && messageInput.isNotBlank(),
                     ) {
                         Text("Send")
                     }
@@ -177,22 +236,43 @@ fun MessageBubble(message: Message) {
         horizontalArrangement = if (message.isUser) Arrangement.End else Arrangement.Start
     ) {
         Surface(
-            shape = RoundedCornerShape(12.dp),
-            color = if (message.isUser) MaterialTheme.colorScheme.primary
-            else MaterialTheme.colorScheme.secondaryContainer,
-            modifier = Modifier.widthIn(max = 280.dp)
+            shape = RoundedCornerShape(12.dp), color = if (message.isUser) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                // Different color when streaming to show it's being generated
+                if (message.isStreaming) {
+                    MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f)
+                } else {
+                    MaterialTheme.colorScheme.secondaryContainer
+                }
+            }, modifier = Modifier.widthIn(max = 280.dp)
         ) {
-            Text(
-                text = message.text,
-                modifier = Modifier.padding(12.dp),
-                color = if (message.isUser) MaterialTheme.colorScheme.onPrimary
-                else MaterialTheme.colorScheme.onSecondaryContainer
-            )
+            Row(
+                modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = message.text, color = if (message.isUser) {
+                        MaterialTheme.colorScheme.onPrimary
+                    } else {
+                        MaterialTheme.colorScheme.onSecondaryContainer
+                    }
+                )
+
+                // Show a cursor/indicator when streaming
+                if (message.isStreaming && message.text.isNotEmpty()) {
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "▋",
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        modifier = Modifier.padding(bottom = 2.dp)
+                    )
+                }
+            }
         }
     }
 }
 
 // Data class to represent a chat message
 data class Message(
-    val text: String, val isUser: Boolean
+    val text: String, val isUser: Boolean, val isStreaming: Boolean = false
 )
