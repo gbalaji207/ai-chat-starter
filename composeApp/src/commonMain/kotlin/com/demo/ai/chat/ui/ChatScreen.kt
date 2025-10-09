@@ -32,6 +32,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -45,11 +48,30 @@ fun ChatScreen() {
     val viewModel = koinViewModel<ChatViewModel>()
     val uiState by viewModel.uiState.collectAsState()
     val listState = rememberLazyListState()
+    var scrollCounter by remember { mutableStateOf(0) }
 
     // Auto-scroll when messages change
     LaunchedEffect(uiState.messages.size) {
         if (uiState.messages.isNotEmpty()) {
-            listState.animateScrollToItem(uiState.messages.size - 1)
+            listState.animateScrollToItem(
+                index = uiState.messages.size - 1,
+                scrollOffset = Int.MAX_VALUE
+            )
+        }
+    }
+
+    // Throttled scroll during streaming
+    LaunchedEffect(uiState.messages.lastOrNull()?.text) {
+        if (uiState.isStreaming && uiState.messages.isNotEmpty()) {
+            scrollCounter++
+            if (scrollCounter % 3 == 0) {
+                listState.scrollToItem(
+                    index = uiState.messages.size - 1,
+                    scrollOffset = Int.MAX_VALUE
+                )
+            }
+        } else {
+            scrollCounter = 0 // Reset when not streaming
         }
     }
 
