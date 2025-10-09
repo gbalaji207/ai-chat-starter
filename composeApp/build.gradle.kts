@@ -31,6 +31,9 @@ kotlin {
             implementation(libs.androidx.activity.compose)
 
             implementation(libs.ktor.client.okhttp)
+
+            // Koin for Android
+            implementation(libs.koin.android)
         }
         commonMain.dependencies {
             implementation(compose.runtime)
@@ -41,6 +44,11 @@ kotlin {
             implementation(compose.components.uiToolingPreview)
             implementation(libs.androidx.lifecycle.viewmodelCompose)
             implementation(libs.androidx.lifecycle.runtimeCompose)
+
+            // Koin for Dependency Injection
+            implementation(libs.koin.core)
+            implementation(libs.koin.compose)
+            implementation(libs.koin.compose.viewmodel)
 
             // import Kotlin API client BOM
             implementation("com.aallam.openai:openai-client:4.0.1")
@@ -85,4 +93,3 @@ android {
 dependencies {
     debugImplementation(compose.uiTooling)
 }
-
