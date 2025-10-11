@@ -17,9 +17,14 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -49,6 +54,7 @@ fun ChatScreen() {
     val uiState by viewModel.uiState.collectAsState()
     val listState = rememberLazyListState()
     var scrollCounter by remember { mutableStateOf(0) }
+    var showClearDialog by remember { mutableStateOf(false) }
 
     // Auto-scroll when messages change
     LaunchedEffect(uiState.messages.size) {
@@ -78,7 +84,19 @@ fun ChatScreen() {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("AI Chat") }
+                title = { Text("AI Chat") },
+                actions = {
+                    // Clear conversation button
+                    IconButton(
+                        onClick = { showClearDialog = true },
+                        enabled = uiState.messages.isNotEmpty() && !uiState.isStreaming
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = "Clear conversation"
+                        )
+                    }
+                }
             )
         },
         snackbarHost = {
@@ -168,6 +186,35 @@ fun ChatScreen() {
                 }
             }
         }
+    }
+
+    // Clear conversation confirmation dialog
+    if (showClearDialog) {
+        AlertDialog(
+            onDismissRequest = { showClearDialog = false },
+            title = { Text("Clear Conversation?") },
+            text = {
+                Text(
+                    "This will permanently delete all messages in this conversation. " +
+                    "This action cannot be undone."
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.clearConversation()
+                        showClearDialog = false
+                    }
+                ) {
+                    Text("Clear")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }
 

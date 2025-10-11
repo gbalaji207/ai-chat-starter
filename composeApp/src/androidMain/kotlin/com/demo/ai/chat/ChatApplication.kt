@@ -1,6 +1,7 @@
 package com.demo.ai.chat
 
 import android.app.Application
+import com.demo.ai.chat.di.androidModule
 import com.demo.ai.chat.di.appModule
 import org.koin.android.ext.koin.androidContext
 import org.koin.android.ext.koin.androidLogger
@@ -18,7 +19,7 @@ class ChatApplication : Application() {
         startKoin {
             androidLogger()
             androidContext(this@ChatApplication)
-            modules(appModule)
+            modules(appModule, androidModule)
         }
     }
 }

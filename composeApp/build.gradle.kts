@@ -6,6 +6,8 @@ plugins {
     alias(libs.plugins.androidApplication)
     alias(libs.plugins.composeMultiplatform)
     alias(libs.plugins.composeCompiler)
+    alias(libs.plugins.ksp)
+    alias(libs.plugins.room)
 }
 
 kotlin {
@@ -14,7 +16,7 @@ kotlin {
             jvmTarget.set(JvmTarget.JVM_11)
         }
     }
-    
+
     listOf(
         iosArm64(),
         iosSimulatorArm64()
@@ -24,7 +26,11 @@ kotlin {
             isStatic = true
         }
     }
-    
+
+    room {
+        schemaDirectory("$projectDir/schemas")
+    }
+
     sourceSets {
         androidMain.dependencies {
             implementation(compose.preview)
@@ -39,11 +45,16 @@ kotlin {
             implementation(compose.runtime)
             implementation(compose.foundation)
             implementation(compose.material3)
+            implementation(compose.materialIconsExtended)
             implementation(compose.ui)
             implementation(compose.components.resources)
             implementation(compose.components.uiToolingPreview)
             implementation(libs.androidx.lifecycle.viewmodelCompose)
             implementation(libs.androidx.lifecycle.runtimeCompose)
+
+            // Room
+            implementation(libs.androidx.room.runtime)
+            implementation(libs.sqlite.bundled)
 
             // Koin for Dependency Injection
             implementation(libs.koin.core)
@@ -92,4 +103,5 @@ android {
 
 dependencies {
     debugImplementation(compose.uiTooling)
+    ksp(libs.androidx.room.compiler)
 }

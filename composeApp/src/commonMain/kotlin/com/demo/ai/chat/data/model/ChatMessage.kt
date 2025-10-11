@@ -12,13 +12,17 @@ import kotlin.time.ExperimentalTime
  * @property isUser True if the message is from the user, false if from the AI
  * @property timestamp The time when the message was created (in milliseconds since epoch)
  * @property isStreaming True if the message is currently being streamed, false otherwise
+ * @property conversationId The ID of the conversation this message belongs to
+ * @property tokens Number of tokens used for this message (calculated when saving to database)
  */
 data class ChatMessage @OptIn(ExperimentalTime::class) constructor(
     val id: String = generateId(),
     val text: String,
     val isUser: Boolean,
     val timestamp: Long = Clock.System.now().toEpochMilliseconds(),
-    val isStreaming: Boolean = false
+    val isStreaming: Boolean = false,
+    val conversationId: String = "default",
+    val tokens: Int = 0
 ) {
     companion object {
         /**
