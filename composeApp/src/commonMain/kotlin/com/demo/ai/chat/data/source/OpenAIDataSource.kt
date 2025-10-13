@@ -6,6 +6,7 @@ import com.aallam.openai.api.model.ModelId
 import com.aallam.openai.client.OpenAI
 import com.demo.ai.chat.data.model.ChatMessage
 import com.demo.ai.chat.data.model.ChatResponse
+import com.demo.ai.chat.data.model.MessageRole
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.flow
@@ -35,7 +36,11 @@ class OpenAIDataSource(
         // Convert our ChatMessage format to OpenAI's ChatMessage format
         val openAIMessages = messages.map { message ->
             OpenAIChatMessage(
-                role = if (message.isUser) ChatRole.User else ChatRole.Assistant,
+                role = when (message.role) {
+                    MessageRole.USER -> ChatRole.User
+                    MessageRole.ASSISTANT -> ChatRole.Assistant
+                    MessageRole.SYSTEM -> ChatRole.System
+                },
                 content = message.text
             )
         }

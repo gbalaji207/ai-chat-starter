@@ -18,7 +18,7 @@ import kotlin.time.ExperimentalTime
 data class ChatMessage @OptIn(ExperimentalTime::class) constructor(
     val id: String = generateId(),
     val text: String,
-    val isUser: Boolean,
+    val role: MessageRole,
     val timestamp: Long = Clock.System.now().toEpochMilliseconds(),
     val isStreaming: Boolean = false,
     val conversationId: String = "default",

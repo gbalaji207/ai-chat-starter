@@ -4,6 +4,7 @@ import com.demo.ai.chat.data.local.entity.ConversationEntity
 import com.demo.ai.chat.data.local.entity.MessageEntity
 import com.demo.ai.chat.data.model.ChatMessage
 import com.demo.ai.chat.data.model.Conversation
+import com.demo.ai.chat.data.model.MessageRole
 
 /**
  * Converts a MessageEntity from the database to a ChatMessage domain model.
@@ -17,7 +18,7 @@ fun MessageEntity.toChatMessage(): ChatMessage {
     return ChatMessage(
         id = id,
         text = text,
-        isUser = isUser,
+        role = MessageRole.valueOf(role),
         timestamp = timestamp,
         isStreaming = false, // Persisted messages are never streaming
         conversationId = conversationId,
@@ -37,7 +38,7 @@ fun ChatMessage.toMessageEntity(): MessageEntity {
         id = id,
         conversationId = conversationId,
         text = text,
-        isUser = isUser,
+        role = role.name,
         timestamp = timestamp,
         tokens = tokens
     )

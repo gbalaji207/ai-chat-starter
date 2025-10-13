@@ -2,6 +2,8 @@ package com.demo.ai.chat.data.repository
 
 import com.demo.ai.chat.data.model.ChatMessage
 import com.demo.ai.chat.data.model.ChatResponse
+import com.demo.ai.chat.data.model.MessageRole
+import com.demo.ai.chat.data.prompts.AIPersonality
 import com.demo.ai.chat.data.source.OpenAIDataSource
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -25,34 +27,41 @@ class ChatRepositoryImpl(
      * This method:
      * - Saves the user message to the database
      * - Retrieves pruned conversation context from the database
+     * - Applies the specified AI personality (if provided) to influence response style
      * - Streams the AI response
      * - Saves the complete AI response to the database
      *
      * @param message The new message text to send
      * @param conversationHistory The list of previous messages (ignored - context comes from database)
+     * @param personality Optional AI personality mode that defines the assistant's behavior and response style
      * @return Flow of ChatResponse objects representing the streaming response
      */
     override fun sendMessage(
         message: String,
-        conversationHistory: List<ChatMessage>
+        conversationHistory: List<ChatMessage>,
+        personality: AIPersonality?
     ): Flow<ChatResponse> = flow {
         try {
             // Create and save user message to database
             val userMessage = ChatMessage(
                 text = message,
-                isUser = true,
+                role = MessageRole.USER,
                 conversationId = conversationId
             )
             conversationManager.addMessage(userMessage)
 
             // Get pruned conversation context from database (respects token limits)
-            val context = conversationManager.getContextForAPI(conversationId)
+            val context =
+                conversationManager.getContextForAPI(conversationId, personality?.systemPrompt)
+
+            // Extract system prompt from personality (if provided)
+            val systemPrompt = personality?.systemPrompt
 
             // Track AI response chunks to save complete response later
             val responseBuilder = StringBuilder()
 
-            // Stream the completion from OpenAI
-            dataSource.streamChatCompletion(context).collect { response ->
+            // Stream the completion from OpenAI with personality-based system prompt
+            dataSource.streamChatCompletion(messages = context).collect { response ->
                 when (response) {
                     is ChatResponse.StreamingChunk -> {
                         // Accumulate the chunk
@@ -65,7 +74,7 @@ class ChatRepositoryImpl(
                         // Save the complete AI response to database
                         val aiMessage = ChatMessage(
                             text = responseBuilder.toString(),
-                            isUser = false,
+                            role = MessageRole.ASSISTANT,
                             conversationId = conversationId
                         )
                         conversationManager.addMessage(aiMessage)
@@ -83,7 +92,7 @@ class ChatRepositoryImpl(
                         // Handle non-streaming success (if ever used)
                         val aiMessage = ChatMessage(
                             text = response.message,
-                            isUser = false,
+                            role = MessageRole.ASSISTANT,
                             conversationId = conversationId
                         )
                         conversationManager.addMessage(aiMessage)
@@ -96,10 +105,12 @@ class ChatRepositoryImpl(
         } catch (e: Exception) {
             e.printStackTrace()
             // Handle database or other errors
-            emit(ChatResponse.Error(
-                message = "Failed to process message: ${e.message ?: "Unknown error"}",
-                throwable = e
-            ))
+            emit(
+                ChatResponse.Error(
+                    message = "Failed to process message: ${e.message ?: "Unknown error"}",
+                    throwable = e
+                )
+            )
         }
     }
 }

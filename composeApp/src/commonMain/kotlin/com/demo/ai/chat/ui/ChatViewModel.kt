@@ -3,6 +3,7 @@ package com.demo.ai.chat.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.demo.ai.chat.data.model.ChatResponse
+import com.demo.ai.chat.data.prompts.AIPersonality
 import com.demo.ai.chat.data.repository.ChatRepository
 import com.demo.ai.chat.data.repository.ConversationManager
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -71,8 +72,11 @@ class ChatViewModel(
             // Get conversation history (excluding the empty AI message we just added)
             val conversationHistory = _uiState.value.messages.dropLast(1)
 
-            // Call repository and collect the streaming response
-            repository.sendMessage(message, conversationHistory)
+            // Get the current personality
+            val personality = _uiState.value.selectedPersonality
+
+            // Call repository with personality and collect the streaming response
+            repository.sendMessage(message, conversationHistory, personality)
                 .collect { response ->
                     when (response) {
                         is ChatResponse.StreamingChunk -> {
@@ -152,5 +156,15 @@ class ChatViewModel(
      */
     fun clearError() {
         _uiState.update { it.clearError() }
+    }
+
+    /**
+     * Updates the selected AI personality mode.
+     * This allows users to switch between different AI response styles (e.g., Professional, Creative, Code Reviewer).
+     *
+     * @param personality The AI personality to use for future messages
+     */
+    fun selectPersonality(personality: AIPersonality) {
+        _uiState.update { it.updatePersonality(personality) }
     }
 }

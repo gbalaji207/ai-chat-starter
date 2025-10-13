@@ -7,6 +7,7 @@ import com.demo.ai.chat.data.local.entity.MessageEntity
 import com.demo.ai.chat.data.local.mapper.toChatMessage
 import com.demo.ai.chat.data.local.mapper.toMessageEntity
 import com.demo.ai.chat.data.model.ChatMessage
+import com.demo.ai.chat.data.model.MessageRole
 import com.demo.ai.chat.data.util.TokenCounter
 import kotlin.time.Clock
 import kotlin.time.ExperimentalTime
@@ -80,24 +81,42 @@ class ConversationManager(
 
     /**
      * Retrieves conversation context optimized for API calls.
-     *
-     * This function:
-     * - Fetches all messages for the conversation from the database
-     * - Prunes the message history to fit within the token limit
-     * - Returns messages in chronological order (oldest first)
-     *
-     * The pruning ensures that the most recent messages are prioritized,
-     * and older messages are dropped if they would exceed the context window.
+     * Includes system prompt if provided and prunes to fit within token limit.
      *
      * @param conversationId The ID of the conversation
-     * @return List of ChatMessages that fit within the token limit, in chronological order
+     * @param systemPrompt Optional system prompt to prepend (uses tokens from limit)
+     * @return List of ChatMessages including system message (if provided) and pruned history
      */
-    suspend fun getContextForAPI(conversationId: String): List<ChatMessage> {
+    suspend fun getContextForAPI(
+        conversationId: String,
+        systemPrompt: String? = null  // NEW PARAMETER
+    ): List<ChatMessage> {
+        // Calculate tokens used by system prompt
+        val systemPromptTokens = systemPrompt?.let {
+            TokenCounter.estimateTokens(it)
+        } ?: 0
+
+        // Adjust available tokens for message history
+        val availableTokensForMessages = maxTokens - systemPromptTokens
+
         // Retrieve all messages from database
         val allMessages = messageDao.getMessagesForConversation(conversationId)
 
-        // Apply pruning to fit within token limits
-        return pruneByTokens(allMessages, maxTokens)
+        // Prune messages to fit within available tokens
+        val prunedMessages = pruneByTokens(allMessages, availableTokensForMessages)
+
+        // Prepend system message if provided
+        return if (systemPrompt != null) {
+            val systemMessage = ChatMessage(
+                text = systemPrompt,
+                role = MessageRole.SYSTEM,
+                conversationId = conversationId,
+                tokens = systemPromptTokens
+            )
+            listOf(systemMessage) + prunedMessages
+        } else {
+            prunedMessages
+        }
     }
 
     /**

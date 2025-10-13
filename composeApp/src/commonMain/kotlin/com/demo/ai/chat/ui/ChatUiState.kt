@@ -1,6 +1,8 @@
 package com.demo.ai.chat.ui
 
 import com.demo.ai.chat.data.model.ChatMessage
+import com.demo.ai.chat.data.model.MessageRole
+import com.demo.ai.chat.data.prompts.AIPersonality
 
 /**
  * Represents the UI state for the chat screen.
@@ -9,12 +11,14 @@ import com.demo.ai.chat.data.model.ChatMessage
  * @property isStreaming True if a message is currently being streamed from the AI
  * @property error An error message to display, or null if no error
  * @property inputText The current text in the input field
+ * @property selectedPersonality The currently selected AI personality mode that influences response style
  */
 data class ChatUiState(
     val messages: List<ChatMessage> = emptyList(),
     val isStreaming: Boolean = false,
     val error: String? = null,
-    val inputText: String = ""
+    val inputText: String = "",
+    val selectedPersonality: AIPersonality = AIPersonality.Professional
 ) {
 
     /**
@@ -26,7 +30,7 @@ data class ChatUiState(
     fun addUserMessage(text: String): ChatUiState {
         val userMessage = ChatMessage(
             text = text,
-            isUser = true
+            role = MessageRole.USER,
         )
         return copy(
             messages = messages + userMessage,
@@ -44,7 +48,7 @@ data class ChatUiState(
     fun addAiMessage(text: String, isStreaming: Boolean = false): ChatUiState {
         val aiMessage = ChatMessage(
             text = text,
-            isUser = false,
+            role = MessageRole.ASSISTANT,
             isStreaming = isStreaming
         )
         return copy(
@@ -88,5 +92,14 @@ data class ChatUiState(
     fun clearError(): ChatUiState {
         return copy(error = null)
     }
-}
 
+    /**
+     * Updates the selected AI personality mode.
+     *
+     * @param personality The new AI personality to use for future messages
+     * @return A new ChatUiState with the personality updated
+     */
+    fun updatePersonality(personality: AIPersonality): ChatUiState {
+        return copy(selectedPersonality = personality)
+    }
+}

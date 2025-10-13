@@ -19,9 +19,12 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.PersonOutline
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -44,6 +47,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.demo.ai.chat.data.model.ChatMessage
+import com.demo.ai.chat.data.model.MessageRole
+import com.demo.ai.chat.data.prompts.AIPersonality
 import org.koin.compose.viewmodel.koinViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -55,6 +60,7 @@ fun ChatScreen() {
     val listState = rememberLazyListState()
     var scrollCounter by remember { mutableStateOf(0) }
     var showClearDialog by remember { mutableStateOf(false) }
+    var showPersonalityMenu by remember { mutableStateOf(false) }
 
     // Auto-scroll when messages change
     LaunchedEffect(uiState.messages.size) {
@@ -84,8 +90,54 @@ fun ChatScreen() {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("AI Chat") },
+                title = {
+                    Column {
+                        Text(
+                            text = "AI Chat",
+                            style = MaterialTheme.typography.titleLarge
+                        )
+                        Text(
+                            text = uiState.selectedPersonality.name,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                },
                 actions = {
+                    // Personality selector button
+                    IconButton(
+                        onClick = {
+                            println("D001 AIPersonality.all: ${AIPersonality.all}")
+                            showPersonalityMenu = true
+                        }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.PersonOutline,
+                            contentDescription = "Select personality"
+                        )
+                    }
+
+                    // Personality dropdown menu
+                    DropdownMenu(
+                        expanded = showPersonalityMenu,
+                        onDismissRequest = { showPersonalityMenu = false }
+                    ) {
+                        AIPersonality.all.forEach { personality ->
+                            DropdownMenuItem(
+                                text = { Text(personality.name) },
+                                onClick = {
+                                    viewModel.selectPersonality(personality)
+                                    showPersonalityMenu = false
+                                },
+                                modifier = if (personality == uiState.selectedPersonality) {
+                                    Modifier.background(MaterialTheme.colorScheme.primaryContainer)
+                                } else {
+                                    Modifier
+                                }
+                            )
+                        }
+                    }
+
                     // Clear conversation button
                     IconButton(
                         onClick = { showClearDialog = true },
@@ -196,7 +248,7 @@ fun ChatScreen() {
             text = {
                 Text(
                     "This will permanently delete all messages in this conversation. " +
-                    "This action cannot be undone."
+                            "This action cannot be undone."
                 )
             },
             confirmButton = {
@@ -222,11 +274,11 @@ fun ChatScreen() {
 fun MessageBubble(message: ChatMessage) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = if (message.isUser) Arrangement.End else Arrangement.Start
+        horizontalArrangement = if (message.role == MessageRole.USER) Arrangement.End else Arrangement.Start
     ) {
         Surface(
             shape = RoundedCornerShape(12.dp),
-            color = if (message.isUser) {
+            color = if (message.role == MessageRole.USER) {
                 MaterialTheme.colorScheme.primary
             } else {
                 // Different color when streaming to show it's being generated
@@ -244,7 +296,7 @@ fun MessageBubble(message: ChatMessage) {
             ) {
                 Text(
                     text = message.text,
-                    color = if (message.isUser) {
+                    color = if (message.role == MessageRole.USER) {
                         MaterialTheme.colorScheme.onPrimary
                     } else {
                         MaterialTheme.colorScheme.onSecondaryContainer

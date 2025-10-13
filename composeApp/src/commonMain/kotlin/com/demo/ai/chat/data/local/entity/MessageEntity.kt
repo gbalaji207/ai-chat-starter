@@ -34,7 +34,7 @@ data class MessageEntity(
     val id: String,
     val conversationId: String,
     val text: String,
-    val isUser: Boolean,
+    val role: String,  // Store as String: "USER", "ASSISTANT", "SYSTEM"
     val timestamp: Long,
     val tokens: Int = 0
 )
