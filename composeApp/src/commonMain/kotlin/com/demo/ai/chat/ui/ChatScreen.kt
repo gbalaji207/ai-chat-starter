@@ -20,16 +20,21 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PersonOutline
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.ProgressIndicatorDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Snackbar
 import androidx.compose.material3.Surface
@@ -45,6 +50,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import com.demo.ai.chat.data.model.ChatMessage
 import com.demo.ai.chat.data.model.MessageRole
@@ -107,7 +113,6 @@ fun ChatScreen() {
                     // Personality selector button
                     IconButton(
                         onClick = {
-                            println("D001 AIPersonality.all: ${AIPersonality.all}")
                             showPersonalityMenu = true
                         }
                     ) {
@@ -188,8 +193,8 @@ fun ChatScreen() {
                     Spacer(modifier = Modifier.height(8.dp))
                 }
 
-                // Streaming indicator - only show when actively streaming
-                if (uiState.isStreaming) {
+                // Streaming indicator - only show when actively streaming and NOT retrying
+                if (uiState.isStreaming && !uiState.isRetrying) {
                     item {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -210,6 +215,15 @@ fun ChatScreen() {
                 }
             }
 
+            // NEW: Retry Progress Indicator - shown between messages and input area
+            if (uiState.isRetrying && uiState.retryMessage != null) {
+                RetryProgressIndicator(
+                    message = uiState.retryMessage!!,
+                    attempt = uiState.retryAttempt,
+                    maxAttempts = uiState.maxRetryAttempts
+                )
+            }
+
             // Input Area
             Row(
                 modifier = Modifier
@@ -222,7 +236,7 @@ fun ChatScreen() {
                     onValueChange = { viewModel.updateInputText(it) },
                     label = { Text("Enter text") },
                     placeholder = { Text("Type something...") },
-                    enabled = !uiState.isStreaming,
+                    enabled = !uiState.isStreaming && !uiState.isRetrying,
                     modifier = Modifier.weight(1f),
                 )
 
@@ -232,7 +246,7 @@ fun ChatScreen() {
                     onClick = {
                         viewModel.sendMessage(uiState.inputText)
                     },
-                    enabled = !uiState.isStreaming && uiState.inputText.isNotBlank(),
+                    enabled = !uiState.isStreaming && !uiState.isRetrying && uiState.inputText.isNotBlank(),
                 ) {
                     Text("Send")
                 }
@@ -267,6 +281,87 @@ fun ChatScreen() {
                 }
             }
         )
+    }
+}
+
+/**
+ * Displays a retry progress indicator with user-friendly messaging.
+ *
+ * Shows when the app is automatically retrying a failed request, providing:
+ * - Clear explanation of what went wrong
+ * - Visual progress indicator showing retry attempt
+ * - Countdown information
+ * - Professional, non-alarming design
+ *
+ * Design uses warning colors (yellow/orange) rather than error colors (red)
+ * to indicate a temporary, recoverable situation.
+ *
+ * @param message User-friendly message explaining the retry (from AIError.toUserMessage())
+ * @param attempt Current retry attempt number (1-based)
+ * @param maxAttempts Maximum number of retry attempts allowed
+ */
+@Composable
+private fun RetryProgressIndicator(
+    message: String,
+    attempt: Int,
+    maxAttempts: Int
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.errorContainer,
+            contentColor = MaterialTheme.colorScheme.onErrorContainer
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.Start,
+            verticalAlignment = Alignment.Top
+        ) {
+            // Refresh/warning icon
+            Icon(
+                imageVector = Icons.Default.Refresh,
+                contentDescription = "Retrying",
+                modifier = Modifier.size(20.dp),
+                tint = MaterialTheme.colorScheme.onErrorContainer
+            )
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            // Message and progress column
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // Retry message text
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onErrorContainer
+                )
+
+                // Progress bar
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    LinearProgressIndicator(
+                        progress = { attempt.toFloat() / maxAttempts.toFloat() },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(4.dp)
+                            .clip(RoundedCornerShape(2.dp)),
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        trackColor = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.3f),
+                        strokeCap = ProgressIndicatorDefaults.LinearStrokeCap,
+                    )
+                }
+            }
+        }
     }
 }
 

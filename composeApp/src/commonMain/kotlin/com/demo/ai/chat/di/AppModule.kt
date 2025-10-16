@@ -10,6 +10,7 @@ import com.demo.ai.chat.data.repository.ChatRepository
 import com.demo.ai.chat.data.repository.ChatRepositoryImpl
 import com.demo.ai.chat.data.repository.ConversationManager
 import com.demo.ai.chat.data.source.OpenAIDataSource
+import com.demo.ai.chat.data.util.RetryPolicy
 import com.demo.ai.chat.ui.ChatViewModel
 import org.koin.dsl.module
 
@@ -24,6 +25,15 @@ val appModule = module {
         OpenAI(
             token = "sk-xxxx",
             logging = LoggingConfig(LogLevel.All)
+        )
+    }
+
+    // RetryPolicy - single instance
+    single {
+        RetryPolicy(
+            maxAttempts = 3,
+            baseDelayMs = 1000,
+            maxDelayMs = 16000
         )
     }
 
@@ -54,7 +64,8 @@ val appModule = module {
     single<ChatRepository> {
         ChatRepositoryImpl(
             dataSource = get(),
-            conversationManager = get()
+            conversationManager = get(),
+            retryPolicy = get()
         )
     }
 

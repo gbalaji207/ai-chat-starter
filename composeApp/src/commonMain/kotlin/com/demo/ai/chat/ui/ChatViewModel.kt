@@ -2,6 +2,7 @@ package com.demo.ai.chat.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.demo.ai.chat.data.model.AIError
 import com.demo.ai.chat.data.model.ChatResponse
 import com.demo.ai.chat.data.prompts.AIPersonality
 import com.demo.ai.chat.data.repository.ChatRepository
@@ -14,6 +15,11 @@ import kotlinx.coroutines.launch
 
 /**
  * ViewModel for managing the chat screen state and business logic.
+ *
+ * Handles automatic retry logic with user-friendly messaging, showing:
+ * - Retry progress with countdown timers
+ * - Clear, actionable error messages
+ * - Streaming response updates
  *
  * @property repository The repository for chat operations
  * @property conversationManager Manages conversation persistence and token limits
@@ -48,7 +54,7 @@ class ChatViewModel(
             } catch (e: Exception) {
                 // Handle error gracefully - start with empty conversation
                 _uiState.update {
-                    it.setError("Failed to load conversation history: ${e.message ?: "Unknown error"}")
+                    it.setError(AIError.Unknown(throwable = e))
                 }
             }
         }
@@ -56,6 +62,21 @@ class ChatViewModel(
 
     /**
      * Sends a message to the AI and handles the streaming response.
+     *
+     * Handles various response states including:
+     * - Streaming chunks (incremental response updates)
+     * - Retry attempts (with user-friendly progress messages)
+     * - Errors (with actionable, non-technical messages)
+     * - Completion (successful response finish)
+     *
+     * ## Retry State Management:
+     * When a transient error occurs (network, rate limit, timeout), the system
+     * automatically retries with exponential backoff. The UI shows:
+     * - User-friendly explanation of what went wrong
+     * - Countdown timer until next retry attempt
+     * - Current attempt number out of total attempts
+     *
+     * When retry succeeds, the retry state is automatically cleared.
      *
      * @param message The message text to send
      */
@@ -88,24 +109,36 @@ class ChatViewModel(
                         }
 
                         is ChatResponse.StreamingComplete -> {
-                            // Mark streaming as complete
+                            // Mark streaming as complete and clear retry state
                             _uiState.update { state ->
                                 val updatedMessages = state.messages.dropLast(1) +
                                         state.messages.last().copy(isStreaming = false)
                                 state.copy(
                                     messages = updatedMessages,
                                     isStreaming = false
+                                ).clearRetrying()  // Clear retry state on success
+                            }
+                        }
+
+                        is ChatResponse.Retrying -> {
+                            // Update UI to show retry progress with user-friendly message
+                            _uiState.update { state ->
+                                state.setRetrying(
+                                    attempt = response.attempt,
+                                    delayMs = response.delayMs,
+                                    error = response.error,
+                                    maxAttempts = 3
                                 )
                             }
                         }
 
                         is ChatResponse.Error -> {
-                            // Remove the empty AI message and set error
+                            // Remove the empty AI message and set user-friendly error
                             _uiState.update { state ->
                                 state.copy(
                                     messages = state.messages.dropLast(1),
                                     isStreaming = false
-                                ).setError(response.message)
+                                ).setError(response.error)
                             }
                         }
 
@@ -114,6 +147,7 @@ class ChatViewModel(
                             _uiState.update { state ->
                                 state.updateLastMessage(response.message)
                                     .copy(isStreaming = false)
+                                    .clearRetrying()  // Clear retry state on success
                             }
                         }
                     }
@@ -134,9 +168,9 @@ class ChatViewModel(
                 // Clear messages from UI state
                 _uiState.update { it.copy(messages = emptyList()) }
             } catch (e: Exception) {
-                // Handle error gracefully
+                // Handle error gracefully with user-friendly message
                 _uiState.update {
-                    it.setError("Failed to clear conversation: ${e.message ?: "Unknown error"}")
+                    it.setError(AIError.Unknown(throwable = e))
                 }
             }
         }
